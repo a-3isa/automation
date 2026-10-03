@@ -1,0 +1,4006 @@
+{
+  "name": "AI Marketing Agency — 12 Agents",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "marketing-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "fd0e15d1-7a04-416e-ae4d-f7ec178bfda4",
+      "name": "Tally Form Webhook",
+      "webhookId": "e004807b-35cd-4206-b0a7-b107fb438463"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"received\" } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        220,
+        0
+      ],
+      "id": "abab3f70-906e-44bb-bd8d-cb19cc0c0083",
+      "name": "Acknowledge Tally"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "d1a01697-0f0a-4b98-a006-27137ac34550",
+              "name": "spreadsheetId",
+              "value": "YOUR_GOOGLE_SHEET_ID",
+              "type": "string"
+            },
+            {
+              "id": "1eed686c-da09-4b9e-b36c-b2c000e93b1c",
+              "name": "parentFolderId",
+              "value": "YOUR_CLIENTS_PARENT_FOLDER_ID",
+              "type": "string"
+            },
+            {
+              "id": "b3777ec1-01b0-4bf0-a5e2-248d8990b59c",
+              "name": "agencyName",
+              "value": "Your Agency",
+              "type": "string"
+            },
+            {
+              "id": "653ab9c5-5651-4d91-8e70-041353544449",
+              "name": "agencyEmail",
+              "value": "you@example.com",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        0
+      ],
+      "id": "98724882-1bc4-4b69-b492-b32096c54345",
+      "name": "Config"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Accepts a Tally webhook payload (data.fields[]) or a flat JSON body for testing.\nconst body = $('Tally Form Webhook').first().json.body ?? {};\nconst raw = {};\nif (Array.isArray(body?.data?.fields)) {\n  for (const f of body.data.fields) {\n    let v = f.value;\n    if (Array.isArray(v) && f.options) v = v.map(id => (f.options.find(o => o.id === id) || {}).text || id).join(', ');\n    else if (Array.isArray(v)) v = v.join(', ');\n    raw[(f.label || f.key || '').toLowerCase().trim()] = v ?? '';\n  }\n} else Object.assign(raw, body);\n\nconst pick = (...keys) => {\n  for (const k of keys) for (const [label, v] of Object.entries(raw))\n    if (label.includes(k) && v !== '' && v != null) return String(v).trim();\n  return '';\n};\n\nconst brief = {\n  business_name:   pick('business', 'company', 'brand'),\n  contact_name:    pick('your name', 'contact', 'name'),\n  contact_email:   pick('email'),\n  website:         pick('website', 'url'),\n  industry:        pick('industry', 'niche', 'sector'),\n  country:         pick('country', 'market', 'location'),\n  offer:           pick('product', 'service', 'offer'),\n  target_audience: pick('audience', 'customer'),\n  goals:           pick('goal', 'objective'),\n  budget:          pick('budget'),\n  competitors:     pick('competitor'),\n  brand_tone:      pick('tone', 'voice', 'personality'),\n  notes:           pick('note', 'anything else', 'additional'),\n};\nif (!brief.business_name || !brief.contact_email)\n  throw new Error('Form is missing business name or contact email');\n\nbrief.client_id = 'CL-' + $now.toFormat('yyyyLLdd-HHmmss');\nbrief.submitted_at = $now.toISO();\nbrief.brief_text = Object.entries(brief)\n  .filter(([k, v]) => v && !['client_id', 'submitted_at'].includes(k))\n  .map(([k, v]) => `- ${k.replace(/_/g, ' ')}: ${v}`).join('\\n');\nreturn [{ json: brief }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        0
+      ],
+      "id": "0c4ea6cb-e2cb-468e-bbf4-0fc19cb18a03",
+      "name": "Normalize Tally Submission"
+    },
+    {
+      "parameters": {
+        "resource": "folder",
+        "name": "={{ $('Normalize Tally Submission').first().json.business_name }} — {{ $('Normalize Tally Submission').first().json.client_id }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.parentFolderId }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        880,
+        0
+      ],
+      "id": "37a51e67-4d4d-4cd4-ac0c-e551a29e88e1",
+      "name": "Create Client Folder"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Clients",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $('Normalize Tally Submission').first().json.client_id }}",
+            "business_name": "={{ $('Normalize Tally Submission').first().json.business_name }}",
+            "contact_name": "={{ $('Normalize Tally Submission').first().json.contact_name }}",
+            "contact_email": "={{ $('Normalize Tally Submission').first().json.contact_email }}",
+            "website": "={{ $('Normalize Tally Submission').first().json.website }}",
+            "industry": "={{ $('Normalize Tally Submission').first().json.industry }}",
+            "budget": "={{ $('Normalize Tally Submission').first().json.budget }}",
+            "status": "In progress",
+            "folder_url": "=https://drive.google.com/drive/folders/{{ $('Create Client Folder').first().json.id }}",
+            "summary_doc_url": "",
+            "submitted_at": "={{ $('Normalize Tally Submission').first().json.submitted_at }}",
+            "delivered_at": ""
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "contact_name",
+              "displayName": "contact_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "contact_email",
+              "displayName": "contact_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "website",
+              "displayName": "website",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "industry",
+              "displayName": "industry",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "budget",
+              "displayName": "budget",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "folder_url",
+              "displayName": "folder_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "summary_doc_url",
+              "displayName": "summary_doc_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "submitted_at",
+              "displayName": "submitted_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "delivered_at",
+              "displayName": "delivered_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1100,
+        0
+      ],
+      "id": "923f6cb6-cbe3-47b2-8c0c-923efb853952",
+      "name": "Register Client"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ query: `${$('Normalize Tally Submission').first().json.industry} market size trends ${$('Normalize Tally Submission').first().json.country} 2026`, search_depth: 'advanced', max_results: 8, include_answer: true }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        0
+      ],
+      "id": "fa477446-0b3c-46dc-a7a0-68ab4295e3ef",
+      "name": "Tavily: Market",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ query: `top competitors of ${$('Normalize Tally Submission').first().json.business_name} ${$('Normalize Tally Submission').first().json.industry} ${$('Normalize Tally Submission').first().json.country} ${$('Normalize Tally Submission').first().json.competitors}`, search_depth: 'advanced', max_results: 8, include_answer: true }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        0
+      ],
+      "id": "0f26ec24-5f78-4b8b-af55-ca89448301d4",
+      "name": "Tavily: Competitors",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ query: `${$('Normalize Tally Submission').first().json.target_audience} buying behaviour pain points ${$('Normalize Tally Submission').first().json.industry} ${$('Normalize Tally Submission').first().json.country}`, search_depth: 'advanced', max_results: 8, include_answer: true }) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        0
+      ],
+      "id": "d03cbac5-07e9-4d38-8e85-3630990e7cfb",
+      "name": "Tavily: Audience",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "const fmt = (node) => {\n  const r = $(node).first().json;\n  const lines = (r.results || []).map((x, i) => `${i + 1}. ${x.title}\\n   ${x.url}\\n   ${(x.content || '').slice(0, 500)}`);\n  return `Summary: ${r.answer || 'n/a'}\\n${lines.join('\\n')}`;\n};\nreturn [{ json: {\n  market_research: fmt('Tavily: Market'),\n  competitor_research: fmt('Tavily: Competitors'),\n  audience_research: fmt('Tavily: Audience'),\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        0
+      ],
+      "id": "8b16b333-4626-4cf5-940f-47cad101b03a",
+      "name": "Compile Research"
+    },
+    {
+      "parameters": {
+        "content": "## 1 · Intake & research\nTally webhook → acknowledge → normalise answers → client Drive folder → `Clients` tab → 3 Tavily web searches.",
+        "width": 2200,
+        "height": 380,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -200
+      ],
+      "id": "3852ad27-4e4d-4bb3-a7cc-d71de57a372f",
+      "name": "Note 10"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Raw onboarding answers:\n{{ $('Normalize Tally Submission').first().json.brief_text }}",
+        "options": {
+          "systemMessage": "You are a senior account strategist. Turn raw onboarding answers into a crisp client brief.\nAgency: {{ $('Config').first().json.agencyName }}. Client: {{ $('Normalize Tally Submission').first().json.business_name }} ({{ $('Normalize Tally Submission').first().json.industry }}, {{ $('Normalize Tally Submission').first().json.country }}).\n\nTask: Write: 1) Business snapshot 2) Offer & price point 3) Goals as SMART objectives with KPIs 4) Budget & constraints 5) Target market 6) Gaps & assumptions you had to make (be explicit) 7) Questions to ask the client.\n\nRules: be specific to this client, no generic filler; use clear headings and tables where useful; if information is missing, state the assumption instead of inventing facts. Output plain text/markdown only."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        520
+      ],
+      "id": "1ec20d4c-6c67-4c16-b869-4b85a7289c73",
+      "name": "A01 Intake Analyst",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 4096
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        80,
+        720
+      ],
+      "id": "10f46a79-2488-4e0b-90cc-6590e15afca4",
+      "name": "Model 01"
+    },
+    {
+      "parameters": {
+        "folderId": "default",
+        "title": "={{ $('Normalize Tally Submission').first().json.business_name }} — 01 Client Brief"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        420,
+        520
+      ],
+      "id": "1e19c2b6-9581-4110-9379-f29da76af111",
+      "name": "Create Doc 01",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $('Create Doc 01').first().json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('A01 Intake Analyst').first().json.output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        640,
+        520
+      ],
+      "id": "07867096-3f68-4b1e-b7d5-166d2799ab2d",
+      "name": "Write Doc 01",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create Doc 01').first().json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create Client Folder').first().json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        860,
+        520
+      ],
+      "id": "af6b656b-7044-4870-a4d4-06386259ace1",
+      "name": "Move Doc 01",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Briefs",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $('Normalize Tally Submission').first().json.client_id }}",
+            "business_name": "={{ $('Normalize Tally Submission').first().json.business_name }}",
+            "deliverable": "01 Client Brief",
+            "doc_url": "=https://docs.google.com/document/d/{{ $('Create Doc 01').first().json.id }}/edit",
+            "preview": "={{ $('A01 Intake Analyst').first().json.output.slice(0, 300) }}",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deliverable",
+              "displayName": "deliverable",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "doc_url",
+              "displayName": "doc_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preview",
+              "displayName": "preview",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1080,
+        520
+      ],
+      "id": "82dbff80-d9b0-4f24-a3fd-ddff3372d8fc",
+      "name": "Log Briefs",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "content": "## Agent 1 · Intake Analyst\nWrite: 1) Business snapshot 2) Offer & price point 3) Goals as SMART objectives with KPIs 4) Budget & constraints 5) Target market 6) Gaps & assumptio…\n→ Google Doc **01 Client Brief** · tab `Briefs`",
+        "width": 1360,
+        "height": 440,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        410
+      ],
+      "id": "d862abef-004f-4472-b616-fe09ab576048",
+      "name": "Note 17"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Client brief:\n{{ $('A01 Intake Analyst').first().json.output.slice(0, 6000) }}\n\nWeb research:\n{{ $('Compile Research').first().json.market_research }}",
+        "options": {
+          "systemMessage": "You are a market research analyst. Use only the brief and the web research provided; cite sources by URL.\nAgency: {{ $('Config').first().json.agencyName }}. Client: {{ $('Normalize Tally Submission').first().json.business_name }} ({{ $('Normalize Tally Submission').first().json.industry }}, {{ $('Normalize Tally Submission').first().json.country }}).\n\nTask: Write: market size & growth signals, key trends, demand drivers, seasonality, regulatory or cultural factors, and 5 opportunities ranked by impact. Flag anything uncertain.\n\nRules: be specific to this client, no generic filler; use clear headings and tables where useful; if information is missing, state the assumption instead of inventing facts. Output plain text/markdown only."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1580,
+        520
+      ],
+      "id": "321f2851-4ebe-40bd-9fae-49faff785a82",
+      "name": "A02 Market Researcher",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 4096
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1580,
+        720
+      ],
+      "id": "64c5be22-922b-4a58-8228-a0dfec1677e0",
+      "name": "Model 02"
+    },
+    {
+      "parameters": {
+        "folderId": "default",
+        "title": "={{ $('Normalize Tally Submission').first().json.business_name }} — 02 Market Research"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        520
+      ],
+      "id": "7ab883b4-95a0-4936-9dcd-36b98dbc89bc",
+      "name": "Create Doc 02",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $('Create Doc 02').first().json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('A02 Market Researcher').first().json.output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        2140,
+        520
+      ],
+      "id": "667800d4-f6f8-4f50-8b63-c9dea424980b",
+      "name": "Write Doc 02",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create Doc 02').first().json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create Client Folder').first().json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2360,
+        520
+      ],
+      "id": "96101e7d-4462-4c19-914e-54f16ac7dd37",
+      "name": "Move Doc 02",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Market Research",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $('Normalize Tally Submission').first().json.client_id }}",
+            "business_name": "={{ $('Normalize Tally Submission').first().json.business_name }}",
+            "deliverable": "02 Market Research",
+            "doc_url": "=https://docs.google.com/document/d/{{ $('Create Doc 02').first().json.id }}/edit",
+            "preview": "={{ $('A02 Market Researcher').first().json.output.slice(0, 300) }}",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deliverable",
+              "displayName": "deliverable",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "doc_url",
+              "displayName": "doc_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preview",
+              "displayName": "preview",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2580,
+        520
+      ],
+      "id": "89681f5f-6938-4aa8-983f-89cc638154ad",
+      "name": "Log Market Research",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "content": "## Agent 2 · Market Researcher\nWrite: market size & growth signals, key trends, demand drivers, seasonality, regulatory or cultural factors, and 5 opportunities ranked by impact. Fl…\n→ Google Doc **02 Market Research** · tab `Market Research`",
+        "width": 1360,
+        "height": 440,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        410
+      ],
+      "id": "7b94207d-61da-42c9-abce-bd9d61816660",
+      "name": "Note 24"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Client brief:\n{{ $('A01 Intake Analyst').first().json.output.slice(0, 6000) }}\n\nWeb research:\n{{ $('Compile Research').first().json.competitor_research }}",
+        "options": {
+          "systemMessage": "You are a competitive intelligence analyst.\nAgency: {{ $('Config').first().json.agencyName }}. Client: {{ $('Normalize Tally Submission').first().json.business_name }} ({{ $('Normalize Tally Submission').first().json.industry }}, {{ $('Normalize Tally Submission').first().json.country }}).\n\nTask: Identify 4-6 competitors. For each: positioning, offer, pricing signals, channels, strengths, weaknesses. Then a comparison table and 3 gaps the client can own. Cite URLs.\n\nRules: be specific to this client, no generic filler; use clear headings and tables where useful; if information is missing, state the assumption instead of inventing facts. Output plain text/markdown only."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        3080,
+        520
+      ],
+      "id": "82bc9b48-8c05-4a4d-9a03-bc83edaecf06",
+      "name": "A03 Competitor Analyst",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 4096
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        3080,
+        720
+      ],
+      "id": "12a5fd38-c598-430b-a227-82637504aefe",
+      "name": "Model 03"
+    },
+    {
+      "parameters": {
+        "folderId": "default",
+        "title": "={{ $('Normalize Tally Submission').first().json.business_name }} — 03 Competitor Analysis"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        3420,
+        520
+      ],
+      "id": "59677152-73af-44c9-a9d8-232a1e8578dd",
+      "name": "Create Doc 03",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $('Create Doc 03').first().json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('A03 Competitor Analyst').first().json.output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        3640,
+        520
+      ],
+      "id": "716628a9-7263-4132-adf1-ff1ea6e5d383",
+      "name": "Write Doc 03",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create Doc 03').first().json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create Client Folder').first().json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3860,
+        520
+      ],
+      "id": "eb9a6c7c-3b60-4d1f-9be5-7fa3a943dd14",
+      "name": "Move Doc 03",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Competitors",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $('Normalize Tally Submission').first().json.client_id }}",
+            "business_name": "={{ $('Normalize Tally Submission').first().json.business_name }}",
+            "deliverable": "03 Competitor Analysis",
+            "doc_url": "=https://docs.google.com/document/d/{{ $('Create Doc 03').first().json.id }}/edit",
+            "preview": "={{ $('A03 Competitor Analyst').first().json.output.slice(0, 300) }}",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deliverable",
+              "displayName": "deliverable",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "doc_url",
+              "displayName": "doc_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preview",
+              "displayName": "preview",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4080,
+        520
+      ],
+      "id": "2c9073a8-ac7d-43b7-aa56-26fa2e7e33d2",
+      "name": "Log Competitors",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "content": "## Agent 3 · Competitor Analyst\nIdentify 4-6 competitors. For each: positioning, offer, pricing signals, channels, strengths, weaknesses. Then a comparison table and 3 gaps the clien…\n→ Google Doc **03 Competitor Analysis** · tab `Competitors`",
+        "width": 1360,
+        "height": 440,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3000,
+        410
+      ],
+      "id": "535eafa3-3105-4f83-88bf-c0fcbf99e5b6",
+      "name": "Note 31"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Client brief:\n{{ $('A01 Intake Analyst').first().json.output.slice(0, 6000) }}\n\nMarket research:\n{{ $('A02 Market Researcher').first().json.output.slice(0, 4000) }}\n\nAudience research:\n{{ $('Compile Research').first().json.audience_research }}",
+        "options": {
+          "systemMessage": "You are a consumer insights strategist.\nAgency: {{ $('Config').first().json.agencyName }}. Client: {{ $('Normalize Tally Submission').first().json.business_name }} ({{ $('Normalize Tally Submission').first().json.industry }}, {{ $('Normalize Tally Submission').first().json.country }}).\n\nTask: Build 3 buyer personas: demographics, jobs-to-be-done, pains, desired outcomes, objections, triggers, where they spend time online, and the message that would convert them.\n\nRules: be specific to this client, no generic filler; use clear headings and tables where useful; if information is missing, state the assumption instead of inventing facts. Output plain text/markdown only."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        4580,
+        520
+      ],
+      "id": "ad1cb331-6241-49f0-90e5-444336356f75",
+      "name": "A04 Audience Strategist",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 4096
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        4580,
+        720
+      ],
+      "id": "be539cb1-ef94-46ae-bfad-f33ce35ae7e5",
+      "name": "Model 04"
+    },
+    {
+      "parameters": {
+        "folderId": "default",
+        "title": "={{ $('Normalize Tally Submission').first().json.business_name }} — 04 Audience Personas"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        4920,
+        520
+      ],
+      "id": "6b6d3d19-3130-46f7-97c1-dcfb268b936d",
+      "name": "Create Doc 04",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $('Create Doc 04').first().json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('A04 Audience Strategist').first().json.output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        5140,
+        520
+      ],
+      "id": "7ba79bd6-b783-4dc1-a538-968620289302",
+      "name": "Write Doc 04",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create Doc 04').first().json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create Client Folder').first().json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        5360,
+        520
+      ],
+      "id": "c02ae3a5-f0d3-41b2-834b-f9cdedbdb60d",
+      "name": "Move Doc 04",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Personas",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $('Normalize Tally Submission').first().json.client_id }}",
+            "business_name": "={{ $('Normalize Tally Submission').first().json.business_name }}",
+            "deliverable": "04 Audience Personas",
+            "doc_url": "=https://docs.google.com/document/d/{{ $('Create Doc 04').first().json.id }}/edit",
+            "preview": "={{ $('A04 Audience Strategist').first().json.output.slice(0, 300) }}",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deliverable",
+              "displayName": "deliverable",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "doc_url",
+              "displayName": "doc_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preview",
+              "displayName": "preview",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        5580,
+        520
+      ],
+      "id": "f86c7ba1-0da4-4ef7-a9b9-a189f26df660",
+      "name": "Log Personas",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "content": "## Agent 4 · Audience Strategist\nBuild 3 buyer personas: demographics, jobs-to-be-done, pains, desired outcomes, objections, triggers, where they spend time online, and the message th…\n→ Google Doc **04 Audience Personas** · tab `Personas`",
+        "width": 1360,
+        "height": 440,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4500,
+        410
+      ],
+      "id": "546f60aa-7720-4e3c-b602-f7b8993424be",
+      "name": "Note 38"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Client brief:\n{{ $('A01 Intake Analyst').first().json.output.slice(0, 6000) }}\n\nCompetitors:\n{{ $('A03 Competitor Analyst').first().json.output.slice(0, 4000) }}\n\nPersonas:\n{{ $('A04 Audience Strategist').first().json.output.slice(0, 4000) }}",
+        "options": {
+          "systemMessage": "You are a brand strategist.\nAgency: {{ $('Config').first().json.agencyName }}. Client: {{ $('Normalize Tally Submission').first().json.business_name }} ({{ $('Normalize Tally Submission').first().json.industry }}, {{ $('Normalize Tally Submission').first().json.country }}).\n\nTask: Write: positioning statement, unique value proposition, 3 messaging pillars with proof points, tagline options (5), tone-of-voice rules (do / don't), and a short brand story.\n\nRules: be specific to this client, no generic filler; use clear headings and tables where useful; if information is missing, state the assumption instead of inventing facts. Output plain text/markdown only."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        1040
+      ],
+      "id": "9b9ae6e7-2013-4f25-bb24-775c05600f5a",
+      "name": "A05 Brand Positioning",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 4096
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        80,
+        1240
+      ],
+      "id": "a7f3c7e9-2ee1-45cd-8519-07a66739ed2e",
+      "name": "Model 05"
+    },
+    {
+      "parameters": {
+        "folderId": "default",
+        "title": "={{ $('Normalize Tally Submission').first().json.business_name }} — 05 Positioning & Messaging"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        420,
+        1040
+      ],
+      "id": "ecd42320-1908-4cf7-bafa-ec271c57b2a5",
+      "name": "Create Doc 05",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $('Create Doc 05').first().json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('A05 Brand Positioning').first().json.output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        640,
+        1040
+      ],
+      "id": "323959d4-053e-4ebd-9eb9-9735ac7d9f3f",
+      "name": "Write Doc 05",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create Doc 05').first().json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create Client Folder').first().json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        860,
+        1040
+      ],
+      "id": "89e9cbc6-8378-416b-9b80-e43cad9817aa",
+      "name": "Move Doc 05",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Positioning",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $('Normalize Tally Submission').first().json.client_id }}",
+            "business_name": "={{ $('Normalize Tally Submission').first().json.business_name }}",
+            "deliverable": "05 Positioning & Messaging",
+            "doc_url": "=https://docs.google.com/document/d/{{ $('Create Doc 05').first().json.id }}/edit",
+            "preview": "={{ $('A05 Brand Positioning').first().json.output.slice(0, 300) }}",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deliverable",
+              "displayName": "deliverable",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "doc_url",
+              "displayName": "doc_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preview",
+              "displayName": "preview",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1080,
+        1040
+      ],
+      "id": "88d90b48-1946-40e8-b937-ad8bd17905f8",
+      "name": "Log Positioning",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "content": "## Agent 5 · Brand Positioning\nWrite: positioning statement, unique value proposition, 3 messaging pillars with proof points, tagline options (5), tone-of-voice rules (do / don't), …\n→ Google Doc **05 Positioning & Messaging** · tab `Positioning`",
+        "width": 1360,
+        "height": 440,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        930
+      ],
+      "id": "a28ae97e-e1be-4763-bfb9-e243f8dcc119",
+      "name": "Note 45"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Client brief:\n{{ $('A01 Intake Analyst').first().json.output.slice(0, 6000) }}\n\nMarket:\n{{ $('A02 Market Researcher').first().json.output.slice(0, 3000) }}\n\nPersonas:\n{{ $('A04 Audience Strategist').first().json.output.slice(0, 3000) }}\n\nPositioning:\n{{ $('A05 Brand Positioning').first().json.output.slice(0, 3000) }}",
+        "options": {
+          "systemMessage": "You are a head of growth planning a 90-day go-to-market.\nAgency: {{ $('Config').first().json.agencyName }}. Client: {{ $('Normalize Tally Submission').first().json.business_name }} ({{ $('Normalize Tally Submission').first().json.industry }}, {{ $('Normalize Tally Submission').first().json.country }}).\n\nTask: Write: funnel (awareness → conversion → retention) with tactics per stage, channel mix with budget split (table, respecting the stated budget), monthly milestones, KPIs and targets, and the tracking setup required.\n\nRules: be specific to this client, no generic filler; use clear headings and tables where useful; if information is missing, state the assumption instead of inventing facts. Output plain text/markdown only."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1580,
+        1040
+      ],
+      "id": "d54267a2-17e6-4427-8b58-7e0da8d06117",
+      "name": "A06 Marketing Strategist",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 4096
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1580,
+        1240
+      ],
+      "id": "4e661ac1-d794-453f-bdf7-216a5890d02e",
+      "name": "Model 06"
+    },
+    {
+      "parameters": {
+        "folderId": "default",
+        "title": "={{ $('Normalize Tally Submission').first().json.business_name }} — 06 90-Day Marketing Strategy"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        1040
+      ],
+      "id": "b7d59768-6a89-4fc3-8449-3bfc2ebf50f9",
+      "name": "Create Doc 06",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $('Create Doc 06').first().json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('A06 Marketing Strategist').first().json.output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        2140,
+        1040
+      ],
+      "id": "883120a4-a01d-47e6-84c2-bd296979bc8d",
+      "name": "Write Doc 06",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create Doc 06').first().json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create Client Folder').first().json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2360,
+        1040
+      ],
+      "id": "a6e04eb2-791e-4c50-9aa3-c904ad6d5eea",
+      "name": "Move Doc 06",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Strategy",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $('Normalize Tally Submission').first().json.client_id }}",
+            "business_name": "={{ $('Normalize Tally Submission').first().json.business_name }}",
+            "deliverable": "06 90-Day Marketing Strategy",
+            "doc_url": "=https://docs.google.com/document/d/{{ $('Create Doc 06').first().json.id }}/edit",
+            "preview": "={{ $('A06 Marketing Strategist').first().json.output.slice(0, 300) }}",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deliverable",
+              "displayName": "deliverable",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "doc_url",
+              "displayName": "doc_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preview",
+              "displayName": "preview",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2580,
+        1040
+      ],
+      "id": "4a0e31e3-f290-4ed6-9055-3fe533ca0177",
+      "name": "Log Strategy",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "content": "## Agent 6 · Marketing Strategist\nWrite: funnel (awareness → conversion → retention) with tactics per stage, channel mix with budget split (table, respecting the stated budget), monthl…\n→ Google Doc **06 90-Day Marketing Strategy** · tab `Strategy`",
+        "width": 1360,
+        "height": 440,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        930
+      ],
+      "id": "0792674c-ed48-4ad1-8146-ea215bb89b3c",
+      "name": "Note 52"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Strategy:\n{{ $('A06 Marketing Strategist').first().json.output.slice(0, 4000) }}\n\nPositioning:\n{{ $('A05 Brand Positioning').first().json.output.slice(0, 3000) }}\n\nPersonas:\n{{ $('A04 Audience Strategist').first().json.output.slice(0, 3000) }}",
+        "options": {
+          "systemMessage": "You are a content strategist.\nAgency: {{ $('Config').first().json.agencyName }}. Client: {{ $('Normalize Tally Submission').first().json.business_name }} ({{ $('Normalize Tally Submission').first().json.industry }}, {{ $('Normalize Tally Submission').first().json.country }}).\n\nTask: Define 4 content pillars, then a 30-day content calendar as a table: day, platform, format, pillar, hook, CTA.\n\nRules: be specific to this client, no generic filler; use clear headings and tables where useful; if information is missing, state the assumption instead of inventing facts. Output plain text/markdown only."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        3080,
+        1040
+      ],
+      "id": "08b18706-ba9c-4d54-9757-f081de81c3db",
+      "name": "A07 Content Strategist",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 4096
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        3080,
+        1240
+      ],
+      "id": "4be82b83-b309-45cd-afd9-ab5dfd17324d",
+      "name": "Model 07"
+    },
+    {
+      "parameters": {
+        "folderId": "default",
+        "title": "={{ $('Normalize Tally Submission').first().json.business_name }} — 07 Content Strategy & Calendar"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        3420,
+        1040
+      ],
+      "id": "6d73f5e8-3c44-4388-8b18-0db6b0772b07",
+      "name": "Create Doc 07",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $('Create Doc 07').first().json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('A07 Content Strategist').first().json.output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        3640,
+        1040
+      ],
+      "id": "b2426461-7315-4ef9-814b-2a67c215d6fb",
+      "name": "Write Doc 07",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create Doc 07').first().json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create Client Folder').first().json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3860,
+        1040
+      ],
+      "id": "a1912f8b-f904-40c6-81c7-d1b87003f80c",
+      "name": "Move Doc 07",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Content Calendar",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $('Normalize Tally Submission').first().json.client_id }}",
+            "business_name": "={{ $('Normalize Tally Submission').first().json.business_name }}",
+            "deliverable": "07 Content Strategy & Calendar",
+            "doc_url": "=https://docs.google.com/document/d/{{ $('Create Doc 07').first().json.id }}/edit",
+            "preview": "={{ $('A07 Content Strategist').first().json.output.slice(0, 300) }}",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deliverable",
+              "displayName": "deliverable",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "doc_url",
+              "displayName": "doc_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preview",
+              "displayName": "preview",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4080,
+        1040
+      ],
+      "id": "fe2cdd3c-4765-46d7-b3b8-e26317225e16",
+      "name": "Log Content Calendar",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "content": "## Agent 7 · Content Strategist\nDefine 4 content pillars, then a 30-day content calendar as a table: day, platform, format, pillar, hook, CTA.…\n→ Google Doc **07 Content Strategy & Calendar** · tab `Content Calendar`",
+        "width": 1360,
+        "height": 440,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3000,
+        930
+      ],
+      "id": "a0f8d804-cb8f-4128-a29f-def6c7f1a1c6",
+      "name": "Note 59"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Content calendar:\n{{ $('A07 Content Strategist').first().json.output.slice(0, 5000) }}\n\nPositioning & tone:\n{{ $('A05 Brand Positioning').first().json.output.slice(0, 3000) }}",
+        "options": {
+          "systemMessage": "You are a social media copywriter who writes scroll-stopping, platform-native copy.\nAgency: {{ $('Config').first().json.agencyName }}. Client: {{ $('Normalize Tally Submission').first().json.business_name }} ({{ $('Normalize Tally Submission').first().json.industry }}, {{ $('Normalize Tally Submission').first().json.country }}).\n\nTask: Write 12 ready-to-publish posts from the calendar (Instagram, Facebook, LinkedIn and 3 TikTok/Reels scripts with scene-by-scene directions). Each with hook, body, CTA and hashtags. Follow the tone rules.\n\nRules: be specific to this client, no generic filler; use clear headings and tables where useful; if information is missing, state the assumption instead of inventing facts. Output plain text/markdown only."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        4580,
+        1040
+      ],
+      "id": "77ca6f13-2cea-41d8-a8fc-a8c2116aa266",
+      "name": "A08 Social Copywriter",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "temperature": 0.8,
+          "maxTokens": 4096
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        4580,
+        1240
+      ],
+      "id": "0e7be365-2b18-4ea4-8acc-67ea98c7933a",
+      "name": "Model 08"
+    },
+    {
+      "parameters": {
+        "folderId": "default",
+        "title": "={{ $('Normalize Tally Submission').first().json.business_name }} — 08 Social Media Posts"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        4920,
+        1040
+      ],
+      "id": "63f7dfe6-97f4-40cd-8a3e-f221f244d7fa",
+      "name": "Create Doc 08",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $('Create Doc 08').first().json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('A08 Social Copywriter').first().json.output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        5140,
+        1040
+      ],
+      "id": "bd8b8cb0-ccb3-4b94-b522-fa6326921f1d",
+      "name": "Write Doc 08",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create Doc 08').first().json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create Client Folder').first().json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        5360,
+        1040
+      ],
+      "id": "2110df47-aa33-41c2-a556-5d91677a8fb4",
+      "name": "Move Doc 08",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Social Posts",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $('Normalize Tally Submission').first().json.client_id }}",
+            "business_name": "={{ $('Normalize Tally Submission').first().json.business_name }}",
+            "deliverable": "08 Social Media Posts",
+            "doc_url": "=https://docs.google.com/document/d/{{ $('Create Doc 08').first().json.id }}/edit",
+            "preview": "={{ $('A08 Social Copywriter').first().json.output.slice(0, 300) }}",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deliverable",
+              "displayName": "deliverable",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "doc_url",
+              "displayName": "doc_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preview",
+              "displayName": "preview",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        5580,
+        1040
+      ],
+      "id": "d20d4be9-1274-4072-ab78-3542e878a1f2",
+      "name": "Log Social Posts",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "content": "## Agent 8 · Social Copywriter\nWrite 12 ready-to-publish posts from the calendar (Instagram, Facebook, LinkedIn and 3 TikTok/Reels scripts with scene-by-scene directions). Each with…\n→ Google Doc **08 Social Media Posts** · tab `Social Posts`",
+        "width": 1360,
+        "height": 440,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4500,
+        930
+      ],
+      "id": "cdbb5326-0337-41cf-8000-d7c6b7af58ac",
+      "name": "Note 66"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Strategy & budget:\n{{ $('A06 Marketing Strategist').first().json.output.slice(0, 4000) }}\n\nPersonas:\n{{ $('A04 Audience Strategist').first().json.output.slice(0, 3000) }}\n\nPositioning:\n{{ $('A05 Brand Positioning').first().json.output.slice(0, 3000) }}",
+        "options": {
+          "systemMessage": "You are a senior performance media buyer (Meta, Google, TikTok).\nAgency: {{ $('Config').first().json.agencyName }}. Client: {{ $('Normalize Tally Submission').first().json.business_name }} ({{ $('Normalize Tally Submission').first().json.industry }}, {{ $('Normalize Tally Submission').first().json.country }}).\n\nTask: Write: campaign structure per platform (objective, campaign/ad set layout, audiences, placements, budget), 10 ad variations (primary text, headline, description, creative brief), Google RSA headlines (15) and descriptions (4), and a 4-week testing plan with kill/scale rules.\n\nRules: be specific to this client, no generic filler; use clear headings and tables where useful; if information is missing, state the assumption instead of inventing facts. Output plain text/markdown only."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        1560
+      ],
+      "id": "26d4b20e-1a10-464f-95b8-4a0b8923a55a",
+      "name": "A09 Paid Ads Specialist",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 4096
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        80,
+        1760
+      ],
+      "id": "78e41e2b-2110-46cf-93f7-f052cb37256a",
+      "name": "Model 09"
+    },
+    {
+      "parameters": {
+        "folderId": "default",
+        "title": "={{ $('Normalize Tally Submission').first().json.business_name }} — 09 Paid Ads Plan & Copy"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        420,
+        1560
+      ],
+      "id": "45e1d977-2573-4716-836d-534ad35b8d6d",
+      "name": "Create Doc 09",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $('Create Doc 09').first().json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('A09 Paid Ads Specialist').first().json.output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        640,
+        1560
+      ],
+      "id": "fed538d3-0147-430f-89c7-8e5c23b69d7e",
+      "name": "Write Doc 09",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create Doc 09').first().json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create Client Folder').first().json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        860,
+        1560
+      ],
+      "id": "671ca181-7bd2-43b8-8268-47ca50c8a71a",
+      "name": "Move Doc 09",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Ad Copy",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $('Normalize Tally Submission').first().json.client_id }}",
+            "business_name": "={{ $('Normalize Tally Submission').first().json.business_name }}",
+            "deliverable": "09 Paid Ads Plan & Copy",
+            "doc_url": "=https://docs.google.com/document/d/{{ $('Create Doc 09').first().json.id }}/edit",
+            "preview": "={{ $('A09 Paid Ads Specialist').first().json.output.slice(0, 300) }}",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deliverable",
+              "displayName": "deliverable",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "doc_url",
+              "displayName": "doc_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preview",
+              "displayName": "preview",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1080,
+        1560
+      ],
+      "id": "21064a9f-d6c2-41dc-b11b-19d93de48659",
+      "name": "Log Ad Copy",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "content": "## Agent 9 · Paid Ads Specialist\nWrite: campaign structure per platform (objective, campaign/ad set layout, audiences, placements, budget), 10 ad variations (primary text, headline, d…\n→ Google Doc **09 Paid Ads Plan & Copy** · tab `Ad Copy`",
+        "width": 1360,
+        "height": 440,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        1450
+      ],
+      "id": "7aa97684-592b-409d-958c-f4a09fcfbec4",
+      "name": "Note 73"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Positioning:\n{{ $('A05 Brand Positioning').first().json.output.slice(0, 3000) }}\n\nPersonas:\n{{ $('A04 Audience Strategist').first().json.output.slice(0, 3000) }}\n\nBrief:\n{{ $('A01 Intake Analyst').first().json.output.slice(0, 2500) }}",
+        "options": {
+          "systemMessage": "You are a lifecycle email marketer.\nAgency: {{ $('Config').first().json.agencyName }}. Client: {{ $('Normalize Tally Submission').first().json.business_name }} ({{ $('Normalize Tally Submission').first().json.industry }}, {{ $('Normalize Tally Submission').first().json.country }}).\n\nTask: Write a 5-email welcome/nurture sequence: send timing, subject line + preview text (2 options each), full body copy and CTA. Then 3 segmentation rules.\n\nRules: be specific to this client, no generic filler; use clear headings and tables where useful; if information is missing, state the assumption instead of inventing facts. Output plain text/markdown only."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        1580,
+        1560
+      ],
+      "id": "b54c4c9d-e128-4da7-b0a2-223600e96340",
+      "name": "A10 Email Marketer",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 4096
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        1580,
+        1760
+      ],
+      "id": "04a9a5e9-9f65-49ab-adee-4a9f5d95067e",
+      "name": "Model 10"
+    },
+    {
+      "parameters": {
+        "folderId": "default",
+        "title": "={{ $('Normalize Tally Submission').first().json.business_name }} — 10 Email Sequence"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        1560
+      ],
+      "id": "9c7965c8-6d78-41dc-acf7-a94c0dd14bdd",
+      "name": "Create Doc 10",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $('Create Doc 10').first().json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('A10 Email Marketer').first().json.output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        2140,
+        1560
+      ],
+      "id": "154e9a77-f2a2-4c63-ae30-80875b2d9c86",
+      "name": "Write Doc 10",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create Doc 10').first().json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create Client Folder').first().json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2360,
+        1560
+      ],
+      "id": "174e8353-c347-40b7-9423-4de185f68609",
+      "name": "Move Doc 10",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Email Sequences",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $('Normalize Tally Submission').first().json.client_id }}",
+            "business_name": "={{ $('Normalize Tally Submission').first().json.business_name }}",
+            "deliverable": "10 Email Sequence",
+            "doc_url": "=https://docs.google.com/document/d/{{ $('Create Doc 10').first().json.id }}/edit",
+            "preview": "={{ $('A10 Email Marketer').first().json.output.slice(0, 300) }}",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deliverable",
+              "displayName": "deliverable",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "doc_url",
+              "displayName": "doc_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preview",
+              "displayName": "preview",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2580,
+        1560
+      ],
+      "id": "c42df95b-e4ba-4a36-a81a-cb7c646f0803",
+      "name": "Log Email Sequences",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "content": "## Agent 10 · Email Marketer\nWrite a 5-email welcome/nurture sequence: send timing, subject line + preview text (2 options each), full body copy and CTA. Then 3 segmentation rules…\n→ Google Doc **10 Email Sequence** · tab `Email Sequences`",
+        "width": 1360,
+        "height": 440,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1500,
+        1450
+      ],
+      "id": "75585f83-dcf8-4a49-bb9d-26d5eb2bb26e",
+      "name": "Note 80"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Market:\n{{ $('A02 Market Researcher').first().json.output.slice(0, 3000) }}\n\nPositioning:\n{{ $('A05 Brand Positioning').first().json.output.slice(0, 3000) }}\n\nPersonas:\n{{ $('A04 Audience Strategist').first().json.output.slice(0, 3000) }}",
+        "options": {
+          "systemMessage": "You are an SEO strategist and conversion copywriter.\nAgency: {{ $('Config').first().json.agencyName }}. Client: {{ $('Normalize Tally Submission').first().json.business_name }} ({{ $('Normalize Tally Submission').first().json.industry }}, {{ $('Normalize Tally Submission').first().json.country }}).\n\nTask: Write: 5 keyword clusters (primary keyword, intent, supporting keywords), 6 blog topics, and full landing-page copy (hero, sub-headline, benefits, social proof slots, FAQ, CTA) plus meta title/description.\n\nRules: be specific to this client, no generic filler; use clear headings and tables where useful; if information is missing, state the assumption instead of inventing facts. Output plain text/markdown only."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        3080,
+        1560
+      ],
+      "id": "2bbb55cd-3a1f-4493-9cc9-22eec89d07f3",
+      "name": "A11 SEO & Landing Page",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 4096
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        3080,
+        1760
+      ],
+      "id": "f4edef3d-e838-4ead-b531-cec50074f3c3",
+      "name": "Model 11"
+    },
+    {
+      "parameters": {
+        "folderId": "default",
+        "title": "={{ $('Normalize Tally Submission').first().json.business_name }} — 11 SEO & Landing Page"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        3420,
+        1560
+      ],
+      "id": "725dd162-e6e4-4a1b-af15-c6d6bfd63e87",
+      "name": "Create Doc 11",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $('Create Doc 11').first().json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('A11 SEO & Landing Page').first().json.output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        3640,
+        1560
+      ],
+      "id": "37678f2b-8bae-47b4-b1f2-db6d8539f32a",
+      "name": "Write Doc 11",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create Doc 11').first().json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create Client Folder').first().json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3860,
+        1560
+      ],
+      "id": "41c9bacf-ac8b-419c-90e6-c8f00786d70f",
+      "name": "Move Doc 11",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "SEO & Landing",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $('Normalize Tally Submission').first().json.client_id }}",
+            "business_name": "={{ $('Normalize Tally Submission').first().json.business_name }}",
+            "deliverable": "11 SEO & Landing Page",
+            "doc_url": "=https://docs.google.com/document/d/{{ $('Create Doc 11').first().json.id }}/edit",
+            "preview": "={{ $('A11 SEO & Landing Page').first().json.output.slice(0, 300) }}",
+            "created_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "business_name",
+              "displayName": "business_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "deliverable",
+              "displayName": "deliverable",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "doc_url",
+              "displayName": "doc_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "preview",
+              "displayName": "preview",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        4080,
+        1560
+      ],
+      "id": "71b536ac-d82e-4c88-8bc9-ec5fbdf17f14",
+      "name": "Log SEO & Landing",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "content": "## Agent 11 · SEO & Landing Page\nWrite: 5 keyword clusters (primary keyword, intent, supporting keywords), 6 blog topics, and full landing-page copy (hero, sub-headline, benefits, soc…\n→ Google Doc **11 SEO & Landing Page** · tab `SEO & Landing`",
+        "width": 1360,
+        "height": 440,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3000,
+        1450
+      ],
+      "id": "0163da9e-15af-4653-ba4d-3c8773f51273",
+      "name": "Note 87"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Brief:\n{{ $('A01 Intake Analyst').first().json.output.slice(0, 2500) }}\n\n02 Market Research:\n{{ $('A02 Market Researcher').first().json.output.slice(0, 1800) }}\n\n03 Competitor Analysis:\n{{ $('A03 Competitor Analyst').first().json.output.slice(0, 1800) }}\n\n04 Audience Personas:\n{{ $('A04 Audience Strategist').first().json.output.slice(0, 1800) }}\n\n05 Positioning & Messaging:\n{{ $('A05 Brand Positioning').first().json.output.slice(0, 1800) }}\n\n06 90-Day Marketing Strategy:\n{{ $('A06 Marketing Strategist').first().json.output.slice(0, 1800) }}\n\n07 Content Strategy & Calendar:\n{{ $('A07 Content Strategist').first().json.output.slice(0, 1800) }}\n\n08 Social Media Posts:\n{{ $('A08 Social Copywriter').first().json.output.slice(0, 1800) }}\n\n09 Paid Ads Plan & Copy:\n{{ $('A09 Paid Ads Specialist').first().json.output.slice(0, 1800) }}\n\n10 Email Sequence:\n{{ $('A10 Email Marketer').first().json.output.slice(0, 1800) }}\n\n11 SEO & Landing Page:\n{{ $('A11 SEO & Landing Page').first().json.output.slice(0, 1800) }}",
+        "options": {
+          "systemMessage": "You are the agency's creative and strategy director doing final QA before the client sees anything.\nAgency: {{ $('Config').first().json.agencyName }}. Client: {{ $('Normalize Tally Submission').first().json.business_name }} ({{ $('Normalize Tally Submission').first().json.industry }}, {{ $('Normalize Tally Submission').first().json.country }}).\n\nTask: Check every deliverable for consistency with the brief, positioning and budget. Write: 1) Executive summary for the client (1 page) 2) Top 5 priorities for the first 2 weeks 3) QA notes: inconsistencies or risks found and how to fix them 4) Open questions for the client.\n\nRules: be specific to this client, no generic filler; use clear headings and tables where useful; if information is missing, state the assumption instead of inventing facts. Output plain text/markdown only."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        4580,
+        1560
+      ],
+      "id": "438b3ac0-dc0f-48e1-8226-c34ff024d28f",
+      "name": "A12 QA Director",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {
+          "temperature": 0.4,
+          "maxTokens": 4096
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        4580,
+        1760
+      ],
+      "id": "5cd899da-bf37-4eb6-b733-3d76b9b06713",
+      "name": "Model 12"
+    },
+    {
+      "parameters": {
+        "folderId": "default",
+        "title": "={{ $('Normalize Tally Submission').first().json.business_name }} — 00 Executive Summary"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        4920,
+        1560
+      ],
+      "id": "20a4d189-eaa1-41b1-8d94-dcf4482ad912",
+      "name": "Create Doc 12",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $('Create Doc 12').first().json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('A12 QA Director').first().json.output }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        5140,
+        1560
+      ],
+      "id": "3c6b8150-622e-4f29-8e26-fa1b6effb8af",
+      "name": "Write Doc 12",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "operation": "move",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Create Doc 12').first().json.id }}",
+          "mode": "id"
+        },
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "={{ $('Create Client Folder').first().json.id }}",
+          "mode": "id"
+        }
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        5360,
+        1560
+      ],
+      "id": "932574c2-d104-46b8-9e87-ef77ee15653c",
+      "name": "Move Doc 12",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "content": "## Agent 12 · QA Director\nCheck every deliverable for consistency with the brief, positioning and budget. Write: 1) Executive summary for the client (1 page) 2) Top 5 prioritie…\n→ Google Doc **00 Executive Summary** · tab `Clients`",
+        "width": 1360,
+        "height": 440,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4500,
+        1450
+      ],
+      "id": "a7a210ca-6fc1-4837-a250-05e1d83e832c",
+      "name": "Note 93"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Normalize Tally Submission').first().json.contact_email }}",
+        "subject": "=Your marketing plan is ready — {{ $('Normalize Tally Submission').first().json.business_name }}",
+        "emailType": "html",
+        "message": "=<p>Hi {{ $('Normalize Tally Submission').first().json.contact_name || 'there' }},</p><p>Your full marketing package from {{ $('Config').first().json.agencyName }} is ready: research, competitors, personas, positioning, 90-day strategy, content calendar, social posts, ad plan, email sequence and SEO/landing-page copy.</p><p><a href=\"https://docs.google.com/document/d/{{ $('Create Doc 12').first().json.id }}/edit\">Start with the executive summary</a> · <a href=\"https://drive.google.com/drive/folders/{{ $('Create Client Folder').first().json.id }}\">Open all deliverables</a></p><p>Reply to this email with any questions, we'll walk you through it on our kickoff call.</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        380,
+        2140
+      ],
+      "id": "4cdf2dcd-a3b6-43a5-bda8-bf60079b0100",
+      "name": "Email Client",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Config').first().json.agencyEmail }}",
+        "subject": "=Delivered: {{ $('Normalize Tally Submission').first().json.business_name }} ({{ $('Normalize Tally Submission').first().json.client_id }})",
+        "emailType": "html",
+        "message": "=<p>12 deliverables created and sent to {{ $('Normalize Tally Submission').first().json.contact_email }}.</p><p><a href=\"https://drive.google.com/drive/folders/{{ $('Create Client Folder').first().json.id }}\">Client folder</a></p><pre>{{ $('A12 QA Director').first().json.output.slice(0, 3000) }}</pre>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        600,
+        2140
+      ],
+      "id": "db9f6136-682a-4c16-a29f-f51427d72c39",
+      "name": "Notify Agency"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "={{ $('Config').first().json.spreadsheetId }}",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Clients",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "client_id": "={{ $('Normalize Tally Submission').first().json.client_id }}",
+            "status": "Delivered",
+            "summary_doc_url": "=https://docs.google.com/document/d/{{ $('Create Doc 12').first().json.id }}/edit",
+            "delivered_at": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "client_id"
+          ],
+          "schema": [
+            {
+              "id": "client_id",
+              "displayName": "client_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "summary_doc_url",
+              "displayName": "summary_doc_url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "delivered_at",
+              "displayName": "delivered_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        820,
+        2140
+      ],
+      "id": "4f9869a4-9865-4399-b3bc-bf96d94aec80",
+      "name": "Mark Client Delivered"
+    },
+    {
+      "parameters": {
+        "content": "## 3 · Delivery\nEmail the client the summary + folder links, notify the agency, set status to Delivered.",
+        "width": 760,
+        "height": 300,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        300,
+        2050
+      ],
+      "id": "665a87db-4a25-4319-bfda-1356ffe52499",
+      "name": "Note 97"
+    }
+  ],
+  "connections": {
+    "Tally Form Webhook": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge Tally",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge Tally": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Normalize Tally Submission",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Tally Submission": {
+      "main": [
+        [
+          {
+            "node": "Create Client Folder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Client Folder": {
+      "main": [
+        [
+          {
+            "node": "Register Client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Client": {
+      "main": [
+        [
+          {
+            "node": "Tavily: Market",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily: Market": {
+      "main": [
+        [
+          {
+            "node": "Tavily: Competitors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily: Competitors": {
+      "main": [
+        [
+          {
+            "node": "Tavily: Audience",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tavily: Audience": {
+      "main": [
+        [
+          {
+            "node": "Compile Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model 01": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A01 Intake Analyst",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compile Research": {
+      "main": [
+        [
+          {
+            "node": "A01 Intake Analyst",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A01 Intake Analyst": {
+      "main": [
+        [
+          {
+            "node": "Create Doc 01",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Doc 01": {
+      "main": [
+        [
+          {
+            "node": "Write Doc 01",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Doc 01": {
+      "main": [
+        [
+          {
+            "node": "Move Doc 01",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Doc 01": {
+      "main": [
+        [
+          {
+            "node": "Log Briefs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model 02": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A02 Market Researcher",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Briefs": {
+      "main": [
+        [
+          {
+            "node": "A02 Market Researcher",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A02 Market Researcher": {
+      "main": [
+        [
+          {
+            "node": "Create Doc 02",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Doc 02": {
+      "main": [
+        [
+          {
+            "node": "Write Doc 02",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Doc 02": {
+      "main": [
+        [
+          {
+            "node": "Move Doc 02",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Doc 02": {
+      "main": [
+        [
+          {
+            "node": "Log Market Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model 03": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A03 Competitor Analyst",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Market Research": {
+      "main": [
+        [
+          {
+            "node": "A03 Competitor Analyst",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A03 Competitor Analyst": {
+      "main": [
+        [
+          {
+            "node": "Create Doc 03",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Doc 03": {
+      "main": [
+        [
+          {
+            "node": "Write Doc 03",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Doc 03": {
+      "main": [
+        [
+          {
+            "node": "Move Doc 03",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Doc 03": {
+      "main": [
+        [
+          {
+            "node": "Log Competitors",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model 04": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A04 Audience Strategist",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Competitors": {
+      "main": [
+        [
+          {
+            "node": "A04 Audience Strategist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A04 Audience Strategist": {
+      "main": [
+        [
+          {
+            "node": "Create Doc 04",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Doc 04": {
+      "main": [
+        [
+          {
+            "node": "Write Doc 04",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Doc 04": {
+      "main": [
+        [
+          {
+            "node": "Move Doc 04",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Doc 04": {
+      "main": [
+        [
+          {
+            "node": "Log Personas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model 05": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A05 Brand Positioning",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Personas": {
+      "main": [
+        [
+          {
+            "node": "A05 Brand Positioning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A05 Brand Positioning": {
+      "main": [
+        [
+          {
+            "node": "Create Doc 05",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Doc 05": {
+      "main": [
+        [
+          {
+            "node": "Write Doc 05",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Doc 05": {
+      "main": [
+        [
+          {
+            "node": "Move Doc 05",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Doc 05": {
+      "main": [
+        [
+          {
+            "node": "Log Positioning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model 06": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A06 Marketing Strategist",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Positioning": {
+      "main": [
+        [
+          {
+            "node": "A06 Marketing Strategist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A06 Marketing Strategist": {
+      "main": [
+        [
+          {
+            "node": "Create Doc 06",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Doc 06": {
+      "main": [
+        [
+          {
+            "node": "Write Doc 06",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Doc 06": {
+      "main": [
+        [
+          {
+            "node": "Move Doc 06",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Doc 06": {
+      "main": [
+        [
+          {
+            "node": "Log Strategy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model 07": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A07 Content Strategist",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Strategy": {
+      "main": [
+        [
+          {
+            "node": "A07 Content Strategist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A07 Content Strategist": {
+      "main": [
+        [
+          {
+            "node": "Create Doc 07",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Doc 07": {
+      "main": [
+        [
+          {
+            "node": "Write Doc 07",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Doc 07": {
+      "main": [
+        [
+          {
+            "node": "Move Doc 07",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Doc 07": {
+      "main": [
+        [
+          {
+            "node": "Log Content Calendar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model 08": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A08 Social Copywriter",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Content Calendar": {
+      "main": [
+        [
+          {
+            "node": "A08 Social Copywriter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A08 Social Copywriter": {
+      "main": [
+        [
+          {
+            "node": "Create Doc 08",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Doc 08": {
+      "main": [
+        [
+          {
+            "node": "Write Doc 08",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Doc 08": {
+      "main": [
+        [
+          {
+            "node": "Move Doc 08",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Doc 08": {
+      "main": [
+        [
+          {
+            "node": "Log Social Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model 09": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A09 Paid Ads Specialist",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Social Posts": {
+      "main": [
+        [
+          {
+            "node": "A09 Paid Ads Specialist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A09 Paid Ads Specialist": {
+      "main": [
+        [
+          {
+            "node": "Create Doc 09",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Doc 09": {
+      "main": [
+        [
+          {
+            "node": "Write Doc 09",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Doc 09": {
+      "main": [
+        [
+          {
+            "node": "Move Doc 09",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Doc 09": {
+      "main": [
+        [
+          {
+            "node": "Log Ad Copy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model 10": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A10 Email Marketer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Ad Copy": {
+      "main": [
+        [
+          {
+            "node": "A10 Email Marketer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A10 Email Marketer": {
+      "main": [
+        [
+          {
+            "node": "Create Doc 10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Doc 10": {
+      "main": [
+        [
+          {
+            "node": "Write Doc 10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Doc 10": {
+      "main": [
+        [
+          {
+            "node": "Move Doc 10",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Doc 10": {
+      "main": [
+        [
+          {
+            "node": "Log Email Sequences",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model 11": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A11 SEO & Landing Page",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Email Sequences": {
+      "main": [
+        [
+          {
+            "node": "A11 SEO & Landing Page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A11 SEO & Landing Page": {
+      "main": [
+        [
+          {
+            "node": "Create Doc 11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Doc 11": {
+      "main": [
+        [
+          {
+            "node": "Write Doc 11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Doc 11": {
+      "main": [
+        [
+          {
+            "node": "Move Doc 11",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Doc 11": {
+      "main": [
+        [
+          {
+            "node": "Log SEO & Landing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Model 12": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "A12 QA Director",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log SEO & Landing": {
+      "main": [
+        [
+          {
+            "node": "A12 QA Director",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A12 QA Director": {
+      "main": [
+        [
+          {
+            "node": "Create Doc 12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Doc 12": {
+      "main": [
+        [
+          {
+            "node": "Write Doc 12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Doc 12": {
+      "main": [
+        [
+          {
+            "node": "Move Doc 12",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Doc 12": {
+      "main": [
+        [
+          {
+            "node": "Email Client",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Client": {
+      "main": [
+        [
+          {
+            "node": "Notify Agency",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Agency": {
+      "main": [
+        [
+          {
+            "node": "Mark Client Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
